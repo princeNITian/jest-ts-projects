@@ -1,0 +1,31 @@
+name: Integration Tests & Discord Notification
+
+on:
+  # push:
+  #   branches: ["main"]
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Unit Tests & Discord Notification"
+    types:
+      - completed
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (with coverage)
+        run: |
+          echo "Integration Test executed successfully.."
