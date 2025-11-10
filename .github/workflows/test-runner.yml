@@ -41,8 +41,8 @@ jobs:
       - name: Notify Discord of coverage
         if: always()
         run: |
-          # Extract full coverage + summary block
-          REPORT=$(awk '/File[ ]+\|/{flag=1} /Time:/{print; flag=0} flag' coverage_output.txt)
+          # Extract coverage table + test summary completely
+          REPORT=$(awk '/File[ ]+\|/{flag=1} /Ran all test suites\./{print; flag=0} flag' coverage_output.txt)
 
           # Escape newlines for JSON
           REPORT_ESCAPED=$(echo "$REPORT" | sed ':a;N;$!ba;s/\n/\\n/g')
