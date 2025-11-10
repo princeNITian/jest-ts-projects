@@ -35,5 +35,5 @@ jobs:
         env:
           CI: true
         run: |
-          npm test:coverage --if-present
+          npm run test:coverage --if-present
           echo "Execution completed.."
