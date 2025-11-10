@@ -1,8 +1,8 @@
 name: Unit Tests & Discord Notification
 
 on:
-  push:
-    branches: ["main"]
+  # push:
+  #   branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -21,6 +21,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests (with coverage)
+      - name: Run tests
         run: |
           echo "Unit Test executed successfully.."

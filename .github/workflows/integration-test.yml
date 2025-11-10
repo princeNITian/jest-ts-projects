@@ -3,7 +3,7 @@ name: Integration Tests & Discord Notification
 on:
   # push:
   #   branches: ["main"]
-  workflow_dispatch:
+  # workflow_dispatch:
   workflow_run:
     workflows:
       - "Unit Tests & Discord Notification"
@@ -26,6 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests (with coverage)
+      - name: Run tests
         run: |
           echo "Integration Test executed successfully.."
