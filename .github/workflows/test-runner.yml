@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Enables manual trigger
+  workflow_dispatch:
 
 jobs:
   install-and-run:
@@ -37,3 +37,11 @@ jobs:
         run: |
           npm run test:coverage --if-present
           echo "Execution completed.."
+
+      - name: Notify Discord of coverage
+        if: always() # Ensures notification is sent even if tests fail
+        run: |
+          COVERAGE=$(grep -Po 'All files.*?\K\d+(?=%)' coverage/lcov-report/index.html || echo "unknown")
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ Jest Tests finished on *main* branch. Coverage: **${COVERAGE}%**\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
