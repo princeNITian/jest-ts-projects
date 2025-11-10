@@ -44,20 +44,17 @@ jobs:
           # Extract report (table + summary)
           REPORT=$(awk '/File[ ]+\|/{flag=1} /^Time:/{print; flag=0} flag' coverage_output.txt)
 
-          # Escape newlines for embed JSON
-          REPORT_ESCAPED=$(echo "$REPORT" | sed ':a;N;$!ba;s/\n/\\n/g')
-
-          # Send embed message
-          curl -H "Content-Type: application/json" \
-            -d "$(jq -n --arg report "$REPORT_ESCAPED" '
-              {
-                "embeds": [
-                  {
-                    "title": "✅ Jest Coverage Report",
-                    "description": "Branch: **main**\n\n```\n\($report)\n```",
-                    "color": 3066993
-                  }
-                ]
-              }
-            ')" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Send embed with REAL newlines preserved
+          jq -n --arg report "$REPORT" '
+            {
+              "embeds": [
+                {
+                  "title": "✅ Jest Coverage Report",
+                  "description": "Branch: **main**\n\n```\n\($report)\n```",
+                  "color": 3066993
+                }
+              ]
+            }
+          ' | curl -H "Content-Type: application/json" \
+               -d @- \
+               ${{ secrets.DISCORD_WEBHOOK_URL }}
