@@ -1,76 +1,27 @@
-name: Run Jest Test Suites
+name: Jest Coverage Report
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: ["main"]
 
 jobs:
-  install-and-run:
+  test-and-report:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        # persist-credentials is true by default; required if you later push back to the repo
+      - uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: "18"
-          cache: "npm"
-
-      - name: Show package.json and test script
-        run: |
-          echo "=== package.json ==="
-          cat package.json
-          echo
-          echo "=== npm test script ==="
-          node -e "console.log(require('./package.json').scripts?.test || 'no test script')"
+          node-version: 18
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Tests (with coverage)
-        env:
-          CI: true
-        run: |
-          # run coverage script if present and capture output to a file for later notification
-          npm run test:coverage --if-present 2>&1 | tee coverage_output.txt
+      - name: Run tests with coverage
+        run: npm test -- --coverage --coverageReporters=json-summary
 
-      - name: Notify Discord of coverage (Embed)
-        if: always()
+      - name: Send report to Discord
+        run: node coverage-report.js
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL secret not set — skipping notification"
-            exit 0
-          fi
-
-          # Extract clean table + summary from test output
-          REPORT=$(awk '/File[ ]+\|/{flag=1} /^Time:/{print; flag=0} flag' coverage_output.txt)
-
-          # If report is empty, fallback to entire test output
-          if [ -z "$REPORT" ]; then
-            REPORT=$(cat coverage_output.txt)
-          fi
-
-          # Create embed JSON
-          jq -n --arg report "$REPORT" '
-          {
-            "embeds": [
-              {
-                "title": "✅ Jest Coverage Report",
-                "description": "Branch: **main**\n\n```\n\($report)\n```",
-                "color": 3066993
-              }
-            ]
-          }
-          ' > /tmp/discord_payload.json
-
-          echo "Sending to Discord..."
-          curl -s -H "Content-Type: application/json" \
-               -d @/tmp/discord_payload.json \
-               "$DISCORD_WEBHOOK_URL" || true
