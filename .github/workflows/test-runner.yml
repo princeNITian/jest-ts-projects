@@ -32,7 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ...existing code...
       - name: Run Tests (with coverage)
         env:
           CI: true
@@ -40,7 +39,7 @@ jobs:
           # run coverage script if present and capture output to a file for later notification
           npm run test:coverage --if-present 2>&1 | tee coverage_output.txt
 
-      - name: Notify Discord of coverage
+      - name: Notify Discord of coverage (Embed)
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -50,32 +49,28 @@ jobs:
             exit 0
           fi
 
-          if [ -f coverage/coverage-summary.json ]; then
-            node -e '
-              const fs = require("fs");
-              const s = JSON.parse(fs.readFileSync("coverage/coverage-summary.json","utf8"));
-              const total = s.total || {};
-              const ref = process.env.GITHUB_REF || process.env.GITHUB_SHA || "workflow";
-              let content = `✅ Jest coverage on ${ref} — lines: ${total.lines?.pct ?? "N/A"}% | statements: ${total.statements?.pct ?? "N/A"}% | functions: ${total.functions?.pct ?? "N/A"}% | branches: ${total.branches?.pct ?? "N/A"}%\\n\\n`;
-              content += "<details>\\n<summary>Coverage table</summary>\\n\\n```text\\n";
-              content += `All files       | Stmts ${total.lines?.pct ?? "N/A"}% | Branches ${total.branches?.pct ?? "N/A"}% | Funcs ${total.functions?.pct ?? "N/A"}% | Lines ${total.statements?.pct ?? "N/A"}%\\n`;
-              Object.keys(s).filter(k=>k!=="total").forEach(k=>{
-                const v = s[k];
-                const name = k.length>15? k.slice(0,12)+"..." : k.padEnd(15);
-                content += `${name} | Stmts ${v.lines?.pct ?? "N/A"}% | Branches ${v.branches?.pct ?? "N/A"}% | Funcs ${v.functions?.pct ?? "N/A"}% | Lines ${v.statements?.pct ?? "N/A"}%\\n`;
-              });
-              content += "```\\n</details>";
-              console.log(JSON.stringify({content}));
-            ' > /tmp/discord_payload.json
-          else
-            node -e '
-              const fs = require("fs");
-              let txt = fs.existsSync("coverage_output.txt") ? fs.readFileSync("coverage_output.txt","utf8") : "(no test output)";
-              if (txt.length > 1500) txt = txt.slice(0,1400) + "\\n... (truncated)";
-              const content = "✅ Jest run output:\\n" + txt;
-              console.log(JSON.stringify({content}));
-            ' > /tmp/discord_payload.json
+          # Extract clean table + summary from test output
+          REPORT=$(awk '/File[ ]+\|/{flag=1} /^Time:/{print; flag=0} flag' coverage_output.txt)
+
+          # If report is empty, fallback to entire test output
+          if [ -z "$REPORT" ]; then
+            REPORT=$(cat coverage_output.txt)
           fi
 
-          echo "Sending coverage notification to Discord"
-          curl -s -H "Content-Type: application/json" -d @/tmp/discord_payload.json "$DISCORD_WEBHOOK_URL" || true
+          # Create embed JSON
+          jq -n --arg report "$REPORT" '
+          {
+            "embeds": [
+              {
+                "title": "✅ Jest Coverage Report",
+                "description": "Branch: **main**\n\n```\n\($report)\n```",
+                "color": 3066993
+              }
+            ]
+          }
+          ' > /tmp/discord_payload.json
+
+          echo "Sending to Discord..."
+          curl -s -H "Content-Type: application/json" \
+               -d @/tmp/discord_payload.json \
+               "$DISCORD_WEBHOOK_URL" || true
