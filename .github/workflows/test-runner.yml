@@ -13,6 +13,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        # persist-credentials is true by default; required if you later push back to the repo
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -31,15 +32,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run Tests (with coverage)
+        env:
+          CI: true
+        run: |
+          # run coverage script if present and capture output to a file for later notification
+          npm run test:coverage --if-present 2>&1 | tee coverage_output.txt
+
       - name: Notify Discord of coverage
         if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          # Extract coverage table + test summary completely
-          REPORT=$(awk '/File[ ]+\|/{flag=1} /Ran all test suites\./{print; flag=0} flag' coverage_output.txt)
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL secret not set — skipping notification"
+            exit 0
+          fi
 
-          # Escape newlines for JSON
-          REPORT_ESCAPED=$(echo "$REPORT" | sed ':a;N;$!ba;s/\n/\\n/g')
+          # If Jest produced coverage/coverage-summary.json prefer that for concise percentages
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const fs = require('fs');
+              const s = JSON.parse(fs.readFileSync('coverage/coverage-summary.json','utf8')).total;
+              const content = \`✅ Jest coverage on \${process.env.GITHUB_REF || 'workflow'} — lines: \${s.lines.pct}% | statements: \${s.statements.pct}% | functions: \${s.functions.pct}% | branches: \${s.branches.pct}%\`;
+              console.log(JSON.stringify({content}));
+            " > /tmp/discord_payload.json
+          else
+            # Fallback: send captured test output (trim to reasonable size)
+            node -e "
+              const fs = require('fs');
+              let txt = fs.existsSync('coverage_output.txt') ? fs.readFileSync('coverage_output.txt','utf8') : '(no test output)';
+              if (txt.length > 1500) txt = txt.slice(0,1400) + '\\n... (truncated)';
+              const content = '✅ Jest run output:\\n' + txt;
+              console.log(JSON.stringify({content}));
+            " > /tmp/discord_payload.json
+          fi
 
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ Jest Coverage Report on *main*:\n\`\`\`\n$REPORT_ESCAPED\n\`\`\`\"}" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          echo "Sending coverage notification to Discord"
+          curl -s -H "Content-Type: application/json" -d @/tmp/discord_payload.json "$DISCORD_WEBHOOK_URL" || true
