@@ -1,0 +1,39 @@
+name: Run Jest Test Suites
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Enables manual trigger
+
+jobs:
+  install-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Show package.json and test script
+        run: |
+          echo "=== package.json ==="
+          cat package.json
+          echo
+          echo "=== npm test script ==="
+          node -e "console.log(require('./package.json').scripts?.test || 'no test script')"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Tests
+        env:
+          CI: true
+        run: |
+          npm test --if-present
+          echo "Execution completed.."
