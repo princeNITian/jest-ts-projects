@@ -31,30 +31,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Tests and Capture Coverage Output
-        env:
-          CI: true
-        run: |
-          npm run test:coverage --if-present | tee coverage_output.txt
-          echo "Execution completed.."
-
-      - name: Notify Discord of coverage (Embed)
+      - name: Notify Discord of coverage
         if: always()
         run: |
-          # Extract report (table + summary)
-          REPORT=$(awk '/File[ ]+\|/{flag=1} /^Time:/{print; flag=0} flag' coverage_output.txt)
+          # Extract coverage table + test summary completely
+          REPORT=$(awk '/File[ ]+\|/{flag=1} /Ran all test suites\./{print; flag=0} flag' coverage_output.txt)
 
-          # Send embed with REAL newlines preserved
-          jq -n --arg report "$REPORT" '
-            {
-              "embeds": [
-                {
-                  "title": "✅ Jest Coverage Report",
-                  "description": "Branch: **main**\n\n```\n\($report)\n```",
-                  "color": 3066993
-                }
-              ]
-            }
-          ' | curl -H "Content-Type: application/json" \
-               -d @- \
-               ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Escape newlines for JSON
+          REPORT_ESCAPED=$(echo "$REPORT" | sed ':a;N;$!ba;s/\n/\\n/g')
+
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ Jest Coverage Report on *main*:\n\`\`\`\n$REPORT_ESCAPED\n\`\`\`\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
