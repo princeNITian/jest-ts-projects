@@ -39,9 +39,17 @@ jobs:
           echo "Execution completed.."
 
       - name: Notify Discord of coverage
-        if: always() # Ensures notification is sent even if tests fail
+        if: always()
         run: |
-          COVERAGE=$(grep -Po 'All files.*?\K\d+(?=%)' coverage/lcov-report/index.html || echo "unknown")
+          # Extract total lines coverage from lcov.info
+          COVERAGE=$(grep -A1 "end_of_record" coverage/lcov.info \
+            | grep -Po 'LF:\d+|LH:\d+' \
+            | awk -F: '
+              $1=="LF"{total=$2}
+              $1=="LH"{hit=$2}
+              END{if(total>0) printf("%.2f", (hit/total)*100); else print "0"}
+            ')
+
           curl -H "Content-Type: application/json" \
             -d "{\"content\": \"✅ Jest Tests finished on *main* branch. Coverage: **${COVERAGE}%**\"}" \
             ${{ secrets.DISCORD_WEBHOOK_URL }}
