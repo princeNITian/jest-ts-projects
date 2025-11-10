@@ -38,15 +38,26 @@ jobs:
           npm run test:coverage --if-present | tee coverage_output.txt
           echo "Execution completed.."
 
-      - name: Notify Discord of coverage
+      - name: Notify Discord of coverage (Embed)
         if: always()
         run: |
-          # Extract coverage table + test summary completely
-          REPORT=$(awk '/File[ ]+\|/{flag=1} /Ran all test suites\./{print; flag=0} flag' coverage_output.txt)
+          # Extract report (table + summary)
+          REPORT=$(awk '/File[ ]+\|/{flag=1} /^Time:/{print; flag=0} flag' coverage_output.txt)
 
-          # Escape newlines for JSON
+          # Escape newlines for embed JSON
           REPORT_ESCAPED=$(echo "$REPORT" | sed ':a;N;$!ba;s/\n/\\n/g')
 
+          # Send embed message
           curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ Jest Coverage Report on *main*:\n\`\`\`\n$REPORT_ESCAPED\n\`\`\`\"}" \
+            -d "$(jq -n --arg report "$REPORT_ESCAPED" '
+              {
+                "embeds": [
+                  {
+                    "title": "✅ Jest Coverage Report",
+                    "description": "Branch: **main**\n\n```\n\($report)\n```",
+                    "color": 3066993
+                  }
+                ]
+              }
+            ')" \
             ${{ secrets.DISCORD_WEBHOOK_URL }}
