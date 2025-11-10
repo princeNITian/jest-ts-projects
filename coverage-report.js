@@ -1,4 +1,3 @@
-// ...existing code...
 const fs = require("fs");
 
 // prefer global fetch (Node 18+). If not present, fail with a clear error so you can install node-fetch.
@@ -98,4 +97,3 @@ fetchFn(webhookUrl, {
     console.log("Discord message sent ✅");
   })
   .catch((err) => console.error("Discord error ❌:", err.message));
-// ...existing code...

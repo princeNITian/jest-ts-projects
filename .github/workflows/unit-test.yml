@@ -1,0 +1,70 @@
+name: Unit Tests & Discord Notification
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (with coverage)
+        run: |
+          # create files for later notification
+          npm test -- --coverage --coverageReporters=json-summary 2>&1 | tee coverage_output.txt
+
+      - name: Notify Discord of test results & coverage
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK secret not set — skipping notification"
+            exit 0
+          fi
+
+          # Prefer concise coverage summary if available
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e '
+              const fs = require("fs");
+              const s = JSON.parse(fs.readFileSync("coverage/coverage-summary.json","utf8"));
+              const total = s.total || {};
+              const ref = process.env.GITHUB_REF || "unknown";
+              const header = `✅ Jest coverage — ${ref}\nLines: ${total.lines?.pct ?? "N/A"}% | Stmts: ${total.statements?.pct ?? "N/A"}% | Funcs: ${total.functions?.pct ?? "N/A"}% | Branches: ${total.branches?.pct ?? "N/A"}%\n\n`;
+              let table = "File".padEnd(30) + " | % Stmts | % Branch | % Funcs | % Lines\n";
+              table += "-".repeat(30) + "-|-" + "-".repeat(8) + "-|-" + "-".repeat(8) + "-|-" + "-".repeat(8) + "\n";
+              Object.keys(s).filter(k => k !== "total").forEach(k => {
+                const v = s[k];
+                const name = k.length > 30 ? k.slice(0,27) + "..." : k.padEnd(30);
+                table += name + " | " + String(v.statements?.pct ?? "N/A").padEnd(7) + " | " + String(v.branches?.pct ?? "N/A").padEnd(7) + " | " + String(v.functions?.pct ?? "N/A").padEnd(6) + " | " + String(v.lines?.pct ?? "N/A") + "\n";
+              });
+              let content = header + "```text\n" + table + "```";
+              if (content.length > 1900) content = content.slice(0,1850) + "\n... (truncated)```";
+              console.log(JSON.stringify({content}));
+            ' > /tmp/discord_payload.json
+          else
+            # fallback to test output
+            node -e '
+              const fs = require("fs");
+              let txt = fs.existsSync("coverage_output.txt") ? fs.readFileSync("coverage_output.txt","utf8") : "(no test output)";
+              if (txt.length > 1500) txt = txt.slice(0,1400) + "\n... (truncated)";
+              const content = "✅ Jest run output:\\n```" + txt + "```";
+              console.log(JSON.stringify({content}));
+            ' > /tmp/discord_payload.json
+          fi
+
+          curl -s -H "Content-Type: application/json" -d @/tmp/discord_payload.json "$DISCORD_WEBHOOK" || true
