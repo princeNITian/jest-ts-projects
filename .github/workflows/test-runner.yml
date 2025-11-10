@@ -17,8 +17,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
 
       - name: Show package.json and test script
         run: |
@@ -35,5 +35,5 @@ jobs:
         env:
           CI: true
         run: |
-          npm test --if-present
+          npm test:coverage --if-present
           echo "Execution completed.."
